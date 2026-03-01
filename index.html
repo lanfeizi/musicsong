@@ -1,0 +1,580 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🎵 音乐进化 · 最终版</title>
+    <!-- 三个API -->
+    <script src="https://unpkg.com/@chordbook/tuner@0.0.3/dist/index.umd.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/essentia.js@0.1.3/dist/essentia.js-core.umd.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0a0f15;
+            color: #e0e0e0;
+            padding: 16px;
+        }
+
+        .app {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        /* Cloudflare 状态栏 */
+        .cf-bar {
+            background: linear-gradient(90deg, #f6821f, #d43c33);
+            border-radius: 50px;
+            padding: 12px 20px;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            color: white;
+            flex-wrap: wrap;
+        }
+
+        .cf-logo {
+            background: white;
+            color: #f6821f;
+            padding: 4px 12px;
+            border-radius: 30px;
+            font-weight: 700;
+        }
+
+        .api-badge {
+            background: #ffffff20;
+            padding: 4px 12px;
+            border-radius: 30px;
+            font-size: 0.8rem;
+        }
+
+        /* 导航 - 原框架 */
+        .nav-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .nav-card {
+            background: #1a2c3c;
+            border-radius: 22px;
+            padding: 16px 8px;
+            text-align: center;
+            border: 1px solid #3f5a6a;
+            cursor: pointer;
+        }
+
+        .nav-card.active {
+            background: #f6821f20;
+            border-color: #f6821f;
+        }
+
+        .nav-icon { font-size: 1.8rem; }
+
+        /* 页面 */
+        .page { display: none; }
+        .page.active { display: block; }
+
+        /* 进化路径卡片 */
+        .path-card {
+            background: #1a2c3c;
+            border-radius: 26px;
+            padding: 22px;
+            margin-bottom: 16px;
+            border-left: 6px solid;
+        }
+
+        .path-card.pitch { border-left-color: #7fc9ff; }
+        .path-card.chord { border-left-color: #ffb07c; }
+        .path-card.rhythm { border-left-color: #a68bff; }
+        .path-card.genre { border-left-color: #ff8a9f; }
+
+        .path-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 15px;
+        }
+
+        .path-name {
+            font-size: 1.2rem;
+            font-weight: 600;
+        }
+
+        .path-progress {
+            height: 8px;
+            background: #2a4050;
+            border-radius: 10px;
+            margin: 15px 0;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #f6821f, #ffb07c);
+            width: 0%;
+            transition: width 0.3s;
+        }
+
+        /* 机器区域 - 蓝色 */
+        .machine-area {
+            background: #1a2c3c;
+            border-left: 6px solid #7fc9ff;
+            border-radius: 24px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .machine-title {
+            color: #7fc9ff;
+            font-weight: 600;
+            margin-bottom: 15px;
+        }
+
+        /* 人脑区域 - 橙色 */
+        .brain-area {
+            background: #1f3445;
+            border-left: 6px solid #ffb07c;
+            border-radius: 24px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .brain-title {
+            color: #ffb07c;
+            font-weight: 600;
+            margin-bottom: 15px;
+        }
+
+        /* 按钮 */
+        .btn {
+            background: #ffb07c;
+            border: none;
+            color: #1a1f2c;
+            padding: 12px 24px;
+            border-radius: 40px;
+            font-weight: 600;
+            cursor: pointer;
+            margin: 5px;
+        }
+        .btn.machine {
+            background: #7fc9ff;
+        }
+
+        /* 输入框 */
+        .brain-input {
+            width: 100%;
+            background: #1a2a38;
+            border: 2px solid #ffb07c40;
+            border-radius: 16px;
+            padding: 15px;
+            color: white;
+            font-size: 1rem;
+            margin-bottom: 10px;
+        }
+
+        /* 实时音高显示 */
+        .pitch-display {
+            font-size: 3rem;
+            font-family: monospace;
+            color: #7fc9ff;
+            text-align: center;
+            margin: 20px 0;
+        }
+
+        /* 分析卡片 */
+        .analysis-card {
+            background: #1a2a38;
+            border-radius: 16px;
+            padding: 15px;
+            margin: 10px 0;
+        }
+
+        .chord-tag {
+            display: inline-block;
+            background: #1f3445;
+            border: 1px solid #ffb07c40;
+            padding: 8px 16px;
+            border-radius: 30px;
+            margin: 5px;
+            font-size: 1.1rem;
+        }
+
+        .hidden { display: none; }
+    </style>
+</head>
+<body>
+    <div class="app">
+        <!-- Cloudflare 状态栏 -->
+        <div class="cf-bar">
+            <span class="cf-logo">Cloudflare</span>
+            <span class="api-badge">Tuner.js</span>
+            <span class="api-badge">ACRCloud</span>
+            <span class="api-badge">Essentia.js</span>
+            <span style="margin-left: auto;">D1 · R2</span>
+        </div>
+
+        <!-- 导航 - 原框架 -->
+        <div class="nav-grid">
+            <div class="nav-card active" onclick="switchPage('path')">
+                <div class="nav-icon">🎯</div>
+                <div>进化</div>
+            </div>
+            <div class="nav-card" onclick="switchPage('analyze')">
+                <div class="nav-icon">🔍</div>
+                <div>分析</div>
+            </div>
+            <div class="nav-card" onclick="switchPage('practice')">
+                <div class="nav-icon">🎤</div>
+                <div>练习</div>
+            </div>
+            <div class="nav-card" onclick="switchPage('brain')">
+                <div class="nav-icon">🧠</div>
+                <div>我的思考</div>
+            </div>
+        </div>
+
+        <!-- ========== 页面1：进化路径 ========== -->
+        <div id="pagePath" class="page active">
+            <div class="path-card pitch">
+                <div class="path-header">
+                    <span class="path-name">🎵 音高感知</span>
+                    <span id="pitchValue">38%</span>
+                </div>
+                <div class="path-progress">
+                    <div class="progress-fill" id="pitchBar" style="width:38%"></div>
+                </div>
+                <div style="color:#b0c8e0;">当前节点：基础音阶</div>
+            </div>
+
+            <div class="path-card chord">
+                <div class="path-header">
+                    <span class="path-name">🎸 和弦识别</span>
+                    <span id="chordValue">24%</span>
+                </div>
+                <div class="path-progress">
+                    <div class="progress-fill" id="chordBar" style="width:24%"></div>
+                </div>
+                <div style="color:#b0c8e0;">当前节点：大三和弦</div>
+            </div>
+
+            <div class="path-card rhythm">
+                <div class="path-header">
+                    <span class="path-name">⚡ 节奏感</span>
+                    <span id="rhythmValue">18%</span>
+                </div>
+                <div class="path-progress">
+                    <div class="progress-fill" id="rhythmBar" style="width:18%"></div>
+                </div>
+                <div style="color:#b0c8e0;">当前节点：基础节拍</div>
+            </div>
+
+            <div class="path-card genre">
+                <div class="path-header">
+                    <span class="path-name">🎼 曲风理解</span>
+                    <span id="genreValue">15%</span>
+                </div>
+                <div class="path-progress">
+                    <div class="progress-fill" id="genreBar" style="width:15%"></div>
+                </div>
+                <div style="color:#b0c8e0;">当前节点：爵士/摇滚</div>
+            </div>
+        </div>
+
+        <!-- ========== 页面2：分析（三个API） ========== -->
+        <div id="pageAnalyze" class="page">
+            <div class="machine-area">
+                <div class="machine-title">🤖 API 分析结果</div>
+                
+                <!-- Tuner.js - 音高检测 -->
+                <div class="analysis-card">
+                    <div style="color:#7fc9ff;">🎤 实时音高</div>
+                    <div class="pitch-display" id="pitchDisplay">-- Hz</div>
+                    <button class="btn machine" onclick="startPitchDetection()">开始检测</button>
+                    <button class="btn machine" onclick="stopPitchDetection()">停止</button>
+                </div>
+
+                <!-- ACRCloud - 歌曲识别 -->
+                <div class="analysis-card">
+                    <div style="color:#7fc9ff;">🔍 歌曲识别</div>
+                    <button class="btn machine" onclick="identifySong()">录音识别歌曲</button>
+                    <div id="songResult" style="margin-top:10px;"></div>
+                </div>
+
+                <!-- Essentia.js - 和弦分析 -->
+                <div class="analysis-card">
+                    <div style="color:#7fc9ff;">🎸 和弦分析</div>
+                    <button class="btn machine" onclick="analyzeChords()">分析当前录音</button>
+                    <div id="chordResult" class="chord-list" style="margin-top:10px;"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ========== 页面3：练习 ========== -->
+        <div id="pagePractice" class="page">
+            <div class="machine-area">
+                <div class="machine-title">🤖 实时练习</div>
+                <div class="pitch-display" id="practicePitch">-- Hz</div>
+                <div style="text-align:center;">
+                    <button class="btn machine" onclick="startPractice()">开始练习</button>
+                    <button class="btn machine" onclick="stopPractice()">停止</button>
+                </div>
+                <div id="practiceFeedback" style="margin-top:20px;"></div>
+            </div>
+        </div>
+
+        <!-- ========== 页面4：你的大脑 ========== -->
+        <div id="pageBrain" class="page">
+            <div class="brain-area">
+                <div class="brain-title">🧠 你的分析和判断</div>
+                
+                <div class="analysis-card">
+                    <div style="color:#ffb07c;">1. 你在练习什么歌曲？</div>
+                    <input type="text" class="brain-input" id="songName" placeholder="例如：So What - Miles Davis">
+                </div>
+
+                <div class="analysis-card">
+                    <div style="color:#ffb07c;">2. 你觉得哪个段落最难？</div>
+                    <input type="text" class="brain-input" id="difficultSection" placeholder="例如：副歌转调的地方">
+                </div>
+
+                <div class="analysis-card">
+                    <div style="color:#ffb07c;">3. 你听到了什么和弦？</div>
+                    <input type="text" class="brain-input" id="chords" placeholder="例如：Dm7 G7 Cmaj7">
+                </div>
+
+                <div class="analysis-card">
+                    <div style="color:#ffb07c;">4. 这首歌给你什么感觉？</div>
+                    <textarea class="brain-input" id="feeling" rows="2" placeholder="例如：忧郁、兴奋、平静..."></textarea>
+                </div>
+
+                <div class="analysis-card">
+                    <div style="color:#ffb07c;">5. 你觉得自己进步了多少？</div>
+                    <select class="brain-input" id="progress">
+                        <option value="3">进步很大 +3%</option>
+                        <option value="1">有点进步 +1%</option>
+                        <option value="0">和以前一样 +0%</option>
+                        <option value="-1">退步了 -1%</option>
+                    </select>
+                </div>
+
+                <button class="btn" onclick="recordBrainAnalysis()">📝 记录我的分析</button>
+            </div>
+
+            <!-- 进化历史 -->
+            <div style="background:#1a2c3c; border-radius:24px; padding:20px; margin-top:20px;">
+                <h3 style="margin-bottom:15px;">📜 进化历史</h3>
+                <div id="history"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ========== 用户进度 ==========
+        let userProgress = {
+            pitch: 38,
+            chord: 24,
+            rhythm: 18,
+            genre: 15,
+            practices: 0,
+            history: []
+        };
+
+        // ========== 三个API ==========
+        let tuner = null;
+        let audioContext = null;
+        let mediaRecorder = null;
+
+        // Tuner.js - 音高检测
+        function startPitchDetection() {
+            tuner = ChordbookTuner.createTuner({
+                onNote: (note) => {
+                    document.getElementById('pitchDisplay').innerHTML = 
+                        `${note.frequency.toFixed(1)} Hz (${note.name}${note.octave})`;
+                    document.getElementById('practicePitch').innerHTML = 
+                        `${note.frequency.toFixed(1)} Hz`;
+                }
+            });
+            tuner.start();
+        }
+
+        function stopPitchDetection() {
+            if (tuner) tuner.stop();
+        }
+
+        function startPractice() {
+            startPitchDetection();
+            document.getElementById('practiceFeedback').innerHTML = '正在练习... 唱吧！';
+        }
+
+        function stopPractice() {
+            stopPitchDetection();
+            document.getElementById('practiceFeedback').innerHTML = '练习结束';
+        }
+
+        // ACRCloud - 歌曲识别（模拟，实际需要API key）
+        async function identifySong() {
+            document.getElementById('songResult').innerHTML = '录音中... 请唱5秒';
+            
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                mediaRecorder = new MediaRecorder(stream);
+                const chunks = [];
+                
+                mediaRecorder.ondataavailable = e => chunks.push(e.data);
+                mediaRecorder.onstop = () => {
+                    // 模拟识别结果
+                    setTimeout(() => {
+                        document.getElementById('songResult').innerHTML = `
+                            🎵 识别结果：So What - Miles Davis<br>
+                            置信度：85%<br>
+                            风格：爵士 · 调式爵士
+                        `;
+                    }, 1000);
+                    
+                    stream.getTracks().forEach(t => t.stop());
+                };
+                
+                mediaRecorder.start();
+                setTimeout(() => mediaRecorder.stop(), 5000);
+                
+            } catch (error) {
+                document.getElementById('songResult').innerHTML = '错误：' + error.message;
+            }
+        }
+
+        // Essentia.js - 和弦分析（模拟）
+        function analyzeChords() {
+            const mockChords = ['Dm7', 'Dm7', 'Eb7', 'Dm7'];
+            let html = '<div style="display:flex; gap:8px; flex-wrap:wrap;">';
+            mockChords.forEach(chord => {
+                html += `<span class="chord-tag">${chord}</span>`;
+            });
+            html += '</div><div style="margin-top:10px;">调性：D多利亚 · 速度：126 BPM</div>';
+            document.getElementById('chordResult').innerHTML = html;
+        }
+
+        // ========== 你的大脑分析 ==========
+        function recordBrainAnalysis() {
+            const song = document.getElementById('songName').value || '未记录';
+            const section = document.getElementById('difficultSection').value || '未记录';
+            const chords = document.getElementById('chords').value || '未记录';
+            const feeling = document.getElementById('feeling').value || '未记录';
+            const progress = parseInt(document.getElementById('progress').value);
+            
+            // 根据你的判断更新进度
+            userProgress.pitch = Math.min(Math.max(userProgress.pitch + progress, 0), 100);
+            userProgress.practices++;
+            
+            // 更新进度条
+            updateProgressBars();
+            
+            // 记录历史
+            const historyEntry = {
+                time: new Date().toLocaleTimeString(),
+                song: song,
+                section: section,
+                chords: chords,
+                feeling: feeling,
+                gain: progress
+            };
+            
+            userProgress.history.unshift(historyEntry);
+            displayHistory();
+            
+            // 保存到Cloudflare
+            saveToCloudflare();
+        }
+
+        function updateProgressBars() {
+            document.getElementById('pitchBar').style.width = userProgress.pitch + '%';
+            document.getElementById('pitchValue').innerHTML = userProgress.pitch + '%';
+            document.getElementById('chordBar').style.width = userProgress.chord + '%';
+            document.getElementById('chordValue').innerHTML = userProgress.chord + '%';
+            document.getElementById('rhythmBar').style.width = userProgress.rhythm + '%';
+            document.getElementById('rhythmValue').innerHTML = userProgress.rhythm + '%';
+            document.getElementById('genreBar').style.width = userProgress.genre + '%';
+            document.getElementById('genreValue').innerHTML = userProgress.genre + '%';
+        }
+
+        function displayHistory() {
+            const historyDiv = document.getElementById('history');
+            historyDiv.innerHTML = '';
+            
+            userProgress.history.slice(0, 10).forEach(item => {
+                const div = document.createElement('div');
+                div.style.background = '#1a2a38';
+                div.style.borderRadius = '12px';
+                div.style.padding = '12px';
+                div.style.marginBottom = '8px';
+                div.style.borderLeft = '4px solid #ffb07c';
+                div.innerHTML = `
+                    <div style="display:flex; justify-content:space-between;">
+                        <span style="color:#ffb07c;">${item.time}</span>
+                        <span>${item.gain > 0 ? '+' + item.gain + '%' : item.gain + '%'}</span>
+                    </div>
+                    <div>🎵 ${item.song}</div>
+                    <div>📍 ${item.section}</div>
+                    <div>🎸 ${item.chords}</div>
+                    <div>💭 ${item.feeling}</div>
+                `;
+                historyDiv.appendChild(div);
+            });
+        }
+
+        // ========== Cloudflare存储 ==========
+        async function saveToCloudflare() {
+            // 调用Worker API保存到D1
+            try {
+                await fetch('/api/save-progress', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(userProgress)
+                });
+                console.log('进度已保存到Cloudflare');
+            } catch (error) {
+                console.log('保存失败，但本地已存');
+            }
+            
+            // 同时保存到本地
+            localStorage.setItem('finalProgress', JSON.stringify(userProgress));
+        }
+
+        // ========== 页面切换 ==========
+        function switchPage(page) {
+            document.querySelectorAll('.nav-card').forEach(c => c.classList.remove('active'));
+            event.currentTarget.classList.add('active');
+            
+            document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+            document.getElementById(`page${page.charAt(0).toUpperCase() + page.slice(1)}`).classList.add('active');
+        }
+
+        // ========== 初始化 ==========
+        function init() {
+            // 加载本地数据
+            const saved = localStorage.getItem('finalProgress');
+            if (saved) {
+                userProgress = JSON.parse(saved);
+                updateProgressBars();
+                displayHistory();
+            }
+        }
+
+        init();
+
+        // 导出全局函数
+        window.switchPage = switchPage;
+        window.startPitchDetection = startPitchDetection;
+        window.stopPitchDetection = stopPitchDetection;
+        window.startPractice = startPractice;
+        window.stopPractice = stopPractice;
+        window.identifySong = identifySong;
+        window.analyzeChords = analyzeChords;
+        window.recordBrainAnalysis = recordBrainAnalysis;
+    </script>
+</body>
+</html>
